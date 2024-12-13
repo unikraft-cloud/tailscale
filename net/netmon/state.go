@@ -52,6 +52,10 @@ func LocalAddresses() (regular, loopback []netip.Addr, err error) {
 	}
 	var regular4, regular6, linklocal4, ula6 []netip.Addr
 	for _, iface := range ifaces {
+		if strings.HasPrefix(iface.Name, "ukp") {
+			continue
+		}
+
 		stdIf := iface.Interface
 		if !isUp(stdIf) || isProblematicInterface(stdIf) {
 			// Skip down interfaces and ones that are
@@ -188,6 +192,9 @@ func ForeachInterface(fn func(Interface, []netip.Prefix)) error {
 // the interface, and Bits are the subnet mask.
 func (ifaces InterfaceList) ForeachInterface(fn func(Interface, []netip.Prefix)) error {
 	for _, iface := range ifaces {
+		if strings.HasPrefix(iface.Name, "ukp") {
+			continue
+		}
 		addrs, err := iface.Addrs()
 		if err != nil {
 			return err
