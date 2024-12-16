@@ -29,7 +29,7 @@ EOF
 fi
 
 tags=""
-ldflags="-X tailscale.com/version.longStamp=${VERSION_LONG} -X tailscale.com/version.shortStamp=${VERSION_SHORT}"
+ldflags="-X tailscale.com/version.longStamp=${VERSION_LONG} -s -w -X tailscale.com/version.shortStamp=${VERSION_SHORT}"
 
 # build_dist.sh arguments must precede go build arguments.
 while [ "$#" -gt 1 ]; do
@@ -49,4 +49,6 @@ while [ "$#" -gt 1 ]; do
 	esac
 done
 
-exec $go build ${tags:+-tags=$tags} -ldflags "$ldflags" "$@"
+export CGO_ENABLED=0
+
+exec $go build ${tags:+-tags=$tags} -ldflags "$ldflags" -buildmode=pie "$@"
