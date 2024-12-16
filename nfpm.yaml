@@ -1,0 +1,39 @@
+name: ukp-tailscale
+arch: amd64
+platform: linux
+version: ${SEMVER}
+maintainer: Unikraft GmbH <monkey@unikraft.io>
+description: The easiest, most secure, cross platform way to use WireGuard + oauth2 + 2FA/SSO. Patched version, compatible with Unikraft Cloud.
+homepage: https://www.tailscale.com
+vendor: Unikraft GmbH
+priority: extra
+section: net
+depends:
+  - iptables
+provides:
+  - tailscale
+recommends:
+  - iproute2
+conflicts:
+  - tailscale
+  - tailscale-relay
+replaces:
+  - tailscale
+  - tailscale-relay
+deb:
+  breaks:
+    - tailscale
+scripts:
+  postinstall: ./release/deb/debian.postinst.sh
+  preremove: ./release/deb/debian.prerm.sh
+  postremove: ./release/deb/debian.postrm.sh
+contents:
+  - src: /platform-tailscaled-install/usr/sbin/tailscaled
+    dst: /usr/sbin/tailscaled
+  - src: /platform-tailscaled-install/usr/bin/tailscale
+    dst: /usr/bin/tailscale
+  - src: ./cmd/tailscaled/tailscaled.service
+    dst: /lib/systemd/system/tailscaled.service
+  - src: ./cmd/tailscaled/tailscaled.defaults
+    dst: /etc/default/tailscaled
+    type: config
