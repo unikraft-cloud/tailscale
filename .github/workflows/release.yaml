@@ -70,9 +70,9 @@ jobs:
         ts_version="$(${UKP_PACKAGE}/usr/sbin/tailscaled --version)"
         export SEMVER=$(echo -n "$ts_version" | head -n 1 | sed 's/^v//')
         export SEMVER="${SEMVER}-${{ steps.build.outputs.COMMITS }}+$(git rev-parse --short=7 HEAD)"
-        if [[ "$GITHUB_REF" == *"prod-staging"* ]]; then
+        if [[ "$GITHUB_REF" == "refs/heads/prod-staging" ]]; then
           export SEMVER="5:${SEMVER}-1staging"
-        elif [[ "$GITHUB_REF" == *"prod-stable"* ]]; then
+        elif [[ "$GITHUB_REF" == "refs/heads/prod-stable" ]]; then
           export SEMVER="5:${SEMVER}-9stable"
         else
           name=$(echo "$GITHUB_REF" | cut -f1,2 --complement -d'/' | tr '/' '+' | tr '-' '+' | tr '*' '+' | tr '[:upper:]' '[:lower:]')
@@ -95,7 +95,7 @@ jobs:
       shell: bash
       run: |
         set -xe
-        if [[ "$GITHUB_REF" == *"prod-stable"* ]]; then
+        if [[ "$GITHUB_REF" == "refs/heads/prod-stable" ]]; then
           FUSER="$FURY_USER_STABLE"
           FTOKEN="$FURY_TOKEN_STABLE"
         fi
