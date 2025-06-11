@@ -1,0 +1,107 @@
+name: release
+
+on:
+  push:
+    branches: [prod-staging, prod-stable]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    container: debian:bookworm
+    env:
+      GO_VERSION: stable
+      PYTHONDONTWRITEBYTECODE: 1
+      UKP_PACKAGE: /platform-tailscaled-install
+    steps:
+    - name: Install extra build dependencies
+      run: |
+        set -xe
+        apt-get update
+        apt-get install --no-install-recommends -y \
+          git \
+          wget \
+          curl \
+          rename \
+          ca-certificates
+
+    - name: Install release dependencies
+      run: |
+        set -xe
+        echo 'deb [trusted=yes] https://repo.goreleaser.com/apt/ /' | tee /etc/apt/sources.list.d/goreleaser.list
+        echo "deb [trusted=yes] https://apt.fury.io/cli/ * *" > /etc/apt/sources.list.d/fury-cli.list
+        apt-get update
+        apt-get install --no-install-recommends -y nfpm fury-cli
+
+    - name: Set up Go ${{ env.GO_VERSION }}
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        submodules: false
+
+    - name: Build
+      id: build
+      run: |
+        set -xe
+        git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+        ./build_dist.sh tailscale.com/cmd/tailscale
+        ./build_dist.sh tailscale.com/cmd/tailscaled
+
+        mkdir -p "${UKP_PACKAGE}/usr/bin"
+        mkdir -p "${UKP_PACKAGE}/usr/sbin"
+        mv ./tailscale  "${UKP_PACKAGE}/usr/bin/tailscale"
+        mv ./tailscaled "${UKP_PACKAGE}/usr/sbin/tailscaled"
+
+        echo "COMMITS=$(git describe --tags --long | awk -F'-' '{print $2}')" > "$GITHUB_OUTPUT"
+
+    - name: Package
+      shell: bash
+      run: |
+        set -xe
+        ts_version="$(${UKP_PACKAGE}/usr/sbin/tailscaled --version)"
+        export SEMVER=$(echo -n "$ts_version" | head -n 1 | sed 's/^v//')
+        export SEMVER="${SEMVER}-${{ steps.build.outputs.COMMITS }}+$(git rev-parse --short=7 HEAD)"
+        if [[ "$GITHUB_REF" == *"prod-staging"* ]]; then
+          export SEMVER="5:${SEMVER}-1staging"
+        elif [[ "$GITHUB_REF" == *"prod-stable"* ]]; then
+          export SEMVER="5:${SEMVER}-9stable"
+        else
+          name=$(echo "$GITHUB_REF" | cut -f1,2 --complement -d'/' | tr '/' '+' | tr '-' '+' | tr '*' '+' | tr '[:upper:]' '[:lower:]')
+          export SEMVER="1:${SEMVER}-0dev+${name}"
+        fi
+        mkdir -p /dist
+        nfpm package --config nfpm.yaml --packager deb --target /dist
+        rename 's/:/_/g' /dist/*.deb
+
+    - name: Upload build artifacts to GitHub
+      uses: actions/upload-artifact@v4
+      with:
+        name: platform-tailscaled-latest
+        path: /dist
+        if-no-files-found: error
+        retention-days: 1
+        overwrite: true
+
+    - name: Publish to Gemfury
+      shell: bash
+      run: |
+        set -xe
+        if [[ "$GITHUB_REF" == *"prod-stable"* ]]; then
+          FUSER="$FURY_USER_STABLE"
+          FTOKEN="$FURY_TOKEN_STABLE"
+        fi
+        fury push "$(ls /dist/*.deb)" --quiet --account "$FUSER" --api-token "$FTOKEN"
+      env:
+        FURY_TOKEN_STABLE: ${{ secrets.FURY_TOKEN }}
+        FURY_USER_STABLE: ${{ secrets.FURY_USER }}
+        FUSER: ${{ secrets.FURY_USER_STAGING }}
+        FTOKEN: ${{ secrets.FURY_TOKEN_STAGING }}
