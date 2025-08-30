@@ -1,0 +1,21 @@
+name: 'Build'
+description: 'Build Tailscale from source code.'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Build
+      shell: bash
+      run: |
+        set -xe
+        git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+        ./build_dist.sh tailscale.com/cmd/tailscale
+        ./build_dist.sh tailscale.com/cmd/tailscaled
+
+        mkdir -p "${UKP_PACKAGE}/usr/bin"
+        mkdir -p "${UKP_PACKAGE}/usr/sbin"
+        mv ./tailscale  "${UKP_PACKAGE}/usr/bin/tailscale"
+        mv ./tailscaled "${UKP_PACKAGE}/usr/sbin/tailscaled"
+
+        echo "COMMITS=$(git describe --tags --long | awk -F'-' '{print $2}')" > "$GITHUB_OUTPUT"

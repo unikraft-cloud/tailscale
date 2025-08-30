@@ -1,0 +1,26 @@
+name: 'Install dependencies'
+description: 'Install build & release dependencies.'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install extra build dependencies
+      shell: bash
+      run: |
+        set -xe
+        apt-get update
+        apt-get install --no-install-recommends -y \
+          curl \
+          git \
+          wget \
+          rename \
+          ca-certificates
+
+    - name: Install release dependencies
+      shell: bash
+      run: |
+        set -xe
+        echo 'deb [trusted=yes] https://repo.goreleaser.com/apt/ /' | tee /etc/apt/sources.list.d/goreleaser.list
+        echo "deb [trusted=yes] https://apt.fury.io/cli/ /" > /etc/apt/sources.list.d/fury-cli.list
+        apt-get update
+        apt-get install --no-install-recommends -y nfpm fury-cli

@@ -1,0 +1,27 @@
+name: 'Publish'
+description: 'Publish debian Tailscale package to Proget.'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Publish to APT repository
+      shell: bash
+      run: |
+        set -xe
+        INTERNAL_FEED=cloud-internal
+        upload() {
+          local pattern="$1" feed="$2" distro="$3" component="$4"
+          for deb in $pattern; do
+            [ -e "$deb" ] || continue
+            cat "${deb}" | curl -L -v \
+              "https://pkg.unikraft.com:8080/debian/$feed/upload/$distro/$component" \
+              -H "Transfer-Encoding: chunked" \
+              -u "api:${PKG_TOKEN}" \
+              -X POST \
+              --data-binary @-
+          done
+          return $?
+        }
+        # upload "/dist/*dbg_*.deb"  "$INTERNAL_FEED" "$DISTRO" "$PKG_COMPONENT"
+        # rm -f "/dist/*dbg_*.deb"
+        upload "/dist/*.deb" "$PKG_FEED" "$DISTRO" "$PKG_COMPONENT"
