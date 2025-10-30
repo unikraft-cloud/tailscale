@@ -27,7 +27,7 @@ runs:
         set -xe
         ts_version="$(${UKP_PACKAGE}/usr/sbin/tailscaled --version)"
         VERSION=$(echo -n "$ts_version" | head -n 1 | sed 's/^v//')
-        VERSION="${VERSION}-${{ steps.build.outputs.COMMITS }}+$(git rev-parse --short=7 HEAD)"
+        VERSION="${VERSION}-${COMMITS}+$(git rev-parse --short=7 HEAD)"
         PKG_COMPONENT=
         PKG_VERSION=
         PKG_FEED=

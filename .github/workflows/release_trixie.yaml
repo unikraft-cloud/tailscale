@@ -18,27 +18,30 @@ jobs:
       PYTHONDONTWRITEBYTECODE: 1
       UKP_PACKAGE: /platform-tailscaled-install
     steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        submodules: false
+
     - name: Install build & release dependencies
-      uses: unikraft-cloud/tailscale/.github/actions/install_dependencies@prod-staging
+      uses: ./.github/actions/install_dependencies
 
     - name: Set up Go ${{ env.GO_VERSION }}
       uses: actions/setup-go@v5
       with:
         go-version: ${{ env.GO_VERSION }}
 
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        submodules: false
-
     - name: Build
-      uses: unikraft-cloud/tailscale/.github/actions/build@prod-staging
+      id: build
+      uses: ./.github/actions/build
 
     - name: Package
       id: package
-      uses:  unikraft-cloud/tailscale/.github/actions/package@prod-staging
+      uses:  ./.github/actions/package
       with:
         nfpm_file: "nfpm.yaml.trixie"
+      env:
+        COMMITS: ${{ steps.build.outputs.commits }}
 
     - name: Upload build artifacts to GitHub
       uses: actions/upload-artifact@v4
@@ -50,7 +53,7 @@ jobs:
         overwrite: true
 
     - name: Publish to APT repository
-      uses: unikraft-cloud/tailscale/.github/actions/publish@prod-staging
+      uses: ./.github/actions/publish
       env:
         DISTRO: "trixie"
         PKG_COMPONENT: ${{ steps.package.outputs.pkg_component }}

@@ -1,11 +1,16 @@
 name: 'Build'
 description: 'Build from sources'
+outputs:
+  commits:
+    description: "Commit count"
+    value: ${{ steps.build.outputs.COMMITS }}
 
 runs:
   using: "composite"
   steps:
     - name: Build
       shell: bash
+      id: build
       run: |
         set -xe
         git config --global --add safe.directory "$GITHUB_WORKSPACE"
