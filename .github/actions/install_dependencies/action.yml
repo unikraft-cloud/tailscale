@@ -11,10 +11,8 @@ runs:
         apt-get update
         apt-get install --no-install-recommends -y \
           curl \
-          git \
           wget \
           rename \
-          ca-certificates
 
     - name: Install release dependencies
       shell: bash
