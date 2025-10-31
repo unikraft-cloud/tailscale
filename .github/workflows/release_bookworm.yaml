@@ -18,6 +18,13 @@ jobs:
       PYTHONDONTWRITEBYTECODE: 1
       UKP_PACKAGE: /platform-tailscaled-install
     steps:
+    - name: Install checkout dependencies
+      run: |
+        set -xe;
+        apt-get update;
+        apt-get install --no-install-recommends -y ca-certificates
+        apt-get install --no-install-recommends -y git
+
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
