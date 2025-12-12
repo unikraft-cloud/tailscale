@@ -1,9 +1,19 @@
-name: release trixie
+name: release
 
 on:
   push:
     branches: [prod-staging, prod-stable, prod-preview]
   workflow_dispatch:
+    inputs:
+      publish_distro:
+        description: 'Distro to publish (bullseye, bookworm, trixie)'
+        type: choice
+        default: 'all'
+        options:
+          - all
+          - bullseye
+          - bookworm
+          - trixie
 
 permissions:
   contents: write
@@ -11,8 +21,17 @@ permissions:
 
 jobs:
   release:
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: ${{ fromJSON(github.event_name == 'push' &&
+         '["bullseye","bookworm","trixie"]' ||
+         (github.event.inputs.publish_distro == 'all' &&
+         '["bullseye","bookworm","trixie"]' || format('["{0}"]', github.event.inputs.publish_distro))) }}
+    outputs:
+      pkg_version: ${{ steps.package.outputs.pkg_version }} # Expose step output as job output
     runs-on: ubuntu-latest
-    container: debian:trixie
+    container: debian:${{ matrix.distro }}
     env:
       GO_VERSION: stable
       PYTHONDONTWRITEBYTECODE: 1
@@ -46,7 +65,7 @@ jobs:
       id: package
       uses:  ./.github/actions/package
       with:
-        nfpm_file: "nfpm.yaml.trixie"
+        nfpm_file: "nfpm.yaml.${{ matrix.distro }}"
       env:
         COMMITS: ${{ steps.build.outputs.commits }}
 
@@ -62,7 +81,10 @@ jobs:
     - name: Publish to APT repository
       uses: ./.github/actions/publish
       env:
-        DISTRO: "trixie"
+        DISTRO: "${{ matrix.distro }}"
         PKG_COMPONENT: ${{ steps.package.outputs.pkg_component }}
         PKG_FEED: ${{ steps.package.outputs.pkg_feed }}
         PKG_TOKEN: ${{ secrets.PKG_TOKEN }}
+
+  # TODO: (TBD) Add a job to deploy release package to ukp-staging environment
+  # get package version from release job output
