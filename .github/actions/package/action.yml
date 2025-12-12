@@ -7,9 +7,9 @@ inputs:
     description: "Name of the NFPM file"
 
 outputs:
-  semver:
+  pkg_version:
     description: "Semantic version"
-    value: ${{ steps.package.outputs.SEMVER }}
+    value: ${{ steps.package.outputs.PKG_VERSION }}
   pkg_component:
     description: "Proget component"
     value: ${{ steps.package.outputs.PKG_COMPONENT }}
@@ -97,7 +97,7 @@ runs:
         nfpm package --config ${{inputs.nfpm_file}} --packager deb --target /dist;
         rename 's/:/_/g' /dist/*.deb
 
-        # Save the SEMVER for later steps
-        echo "SEMVER=${SEMVER}" >> "$GITHUB_OUTPUT"
+        # Save VARS for later steps
+        echo "PKG_VERSION=${PKG_VERSION}" >> "$GITHUB_OUTPUT"
         echo "PKG_COMPONENT=${PKG_COMPONENT}" >> $GITHUB_OUTPUT
         echo "PKG_FEED=${PKG_FEED}" >> $GITHUB_OUTPUT
