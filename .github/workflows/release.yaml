@@ -78,13 +78,46 @@ jobs:
         retention-days: 1
         overwrite: true
 
-    - name: Publish to APT repository
-      uses: ./.github/actions/publish
+    - name: Generate changelog
+      uses: unikraft-cloud/internal-actions/actions/generate-changelog@prod-staging
+      with:
+        genver_file: "support/scripts/genver.sh"
+        genver_file_args: "${{ env.UKP_PACKAGE }} ${{ steps.build.outputs.commits }}"
+        distro: "${{ matrix.distro }}"
+
+    - name: Publish to Gemfury
+      if: ${{ (matrix.distro == 'bullseye') && (github.ref == 'refs/heads/prod-stable' || github.ref == 'refs/heads/prod-staging') }}
+      shell: bash
+      run: |
+        set -xe
+        if [[ "$GITHUB_REF" == "refs/heads/prod-stable" ]]; then
+          FUSER="$FURY_USER_STABLE"
+          FTOKEN="$FURY_TOKEN_STABLE"
+        fi
+        fury push "$(ls /dist/*.deb)" --quiet --account "$FUSER" --api-token "$FTOKEN"
       env:
-        DISTRO: "${{ matrix.distro }}"
-        PKG_COMPONENT: ${{ steps.package.outputs.pkg_component }}
-        PKG_FEED: ${{ steps.package.outputs.pkg_feed }}
-        PKG_TOKEN: ${{ secrets.PKG_TOKEN }}
+        FURY_TOKEN_STABLE: ${{ secrets.FURY_TOKEN }}
+        FURY_USER_STABLE: ${{ secrets.FURY_USER }}
+        FUSER: ${{ secrets.FURY_USER_STAGING }}
+        FTOKEN: ${{ secrets.FURY_TOKEN_STAGING }}
+
+    - name: Publish to APT repository
+      uses: unikraft-cloud/internal-actions/actions/publish-to-proget@prod-staging
+      with:
+        distro: "${{ matrix.distro }}"
+        pkg_token: ${{ secrets.PKG_TOKEN }}
+        pkg_component: ${{ steps.package.outputs.pkg_component }}
+        pkg_feed: ${{ steps.package.outputs.pkg_feed }}
+        pkg_dir: "/dist"
+
+    - name: Publish changelog
+      uses: unikraft-cloud/internal-actions/actions/publish-changelog-to-proget@prod-staging
+      with:
+        pkg_token: ${{ secrets.PKG_TOKEN }}
+        asset_directory: ${{ (github.ref_name == 'prod-staging' && 'cloud-staging-changelogs') || (github.ref_name == 'prod-stable' || github.ref_name == 'prod-preview' && 'cloud-changelogs') || 'cloud-internal-changelogs' }}
+        package: "ukp-tailscale"
+        component: ${{ steps.package.outputs.pkg_component }}
+        version: "${{ steps.package.outputs.pkg_version }}"
 
   # TODO: (TBD) Add a job to deploy release package to ukp-staging environment
   # get package version from release job output
