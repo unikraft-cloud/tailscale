@@ -7,8 +7,11 @@ inputs:
     description: "Name of the NFPM file"
 
 outputs:
+  pkg_version_prefix:
+    description: "Version prefix"
+    value: ${{ steps.package.outputs.PKG_VERSION_PREFIX }}
   pkg_version:
-    description: "Semantic version"
+    description: "Full version"
     value: ${{ steps.package.outputs.PKG_VERSION }}
   pkg_component:
     description: "Proget component"
@@ -25,11 +28,9 @@ runs:
       id: package
       run: |
         set -xe
-        ts_version="$(${UKP_PACKAGE}/usr/sbin/tailscaled --version)"
-        VERSION=$(echo -n "$ts_version" | head -n 1 | sed 's/^v//')
-        VERSION="${VERSION}-${COMMITS}+$(git rev-parse --short=7 HEAD)"
+        VERSION="$(support/scripts/genver.sh ${UKP_PACKAGE} ${COMMITS})"
         PKG_COMPONENT=
-        PKG_VERSION=
+        PKG_VERSION_PREFIX=
         PKG_FEED=
 
         branch2version() {
@@ -60,44 +61,45 @@ runs:
 
         if [[ "$GITHUB_REF" == 'refs/heads/prod-stable' ]]; then
           PKG_COMPONENT="stable"
-          PKG_VERSION="5:${VERSION}-9stable"
+          PKG_VERSION_PREFIX="5:${VERSION}-9stable"
           PKG_FEED="cloud"
         elif [[ "$GITHUB_REF" == "refs/heads/prod-preview" ]]; then
           PKG_COMPONENT="preview"
-          PKG_VERSION="5:${VERSION}-7preview"
+          PKG_VERSION_PREFIX="5:${VERSION}-7preview"
           PKG_FEED="cloud"
         elif [[ "$GITHUB_REF" == 'refs/heads/prod-staging' ]]; then
           PKG_COMPONENT="staging"
-          PKG_VERSION="5:${VERSION}-2staging"
+          PKG_VERSION_PREFIX="5:${VERSION}-2staging"
           PKG_FEED="cloud-staging"
         else
           mapfile -t BRCUSTOM < <( branch2version "$( printf '%s' "$GITHUB_REF" | cut -f1,2 --complement -d'/' )")
           if [ -n "${BRCUSTOM[0]}" ]; then
             PKG_COMPONENT="${BRCUSTOM[0]}"
-            PKG_VERSION="5:${VERSION}-0dev+${BRCUSTOM[0]}+${BRCUSTOM[1]}"
+            PKG_VERSION_PREFIX="5:${VERSION}-0dev+${BRCUSTOM[0]}+${BRCUSTOM[1]}"
           else
             # branch does not have a user name
             PKG_COMPONENT="devel"
-            PKG_VERSION="5:${VERSION}-0dev+${BRCUSTOM[1]}"
+            PKG_VERSION_PREFIX="5:${VERSION}-0dev+${BRCUSTOM[1]}"
           fi
           PKG_FEED="cloud-internal"
         fi
 
         PKG_DISTVER=""
         if   [ "${DISTRO}" = "trixie" ]; then
-          PKG_DISTVER="+deb13"
+          PKG_DISTVER="deb13"
         elif [ "${DISTRO}" = "bookworm" ]; then
-          PKG_DISTVER="+deb12"
+          PKG_DISTVER="deb12"
         elif [ "${DISTRO}" = "bullseye" ]; then
-          PKG_DISTVER="+deb11"
+          PKG_DISTVER="deb11"
         fi
 
-        export SEMVER="${PKG_VERSION}${PKG_DISTVER}"
+        export SEMVER="${PKG_VERSION_PREFIX}+${PKG_DISTVER}"
         mkdir -p /dist;
         nfpm package --config ${{inputs.nfpm_file}} --packager deb --target /dist;
         rename 's/:/_/g' /dist/*.deb
 
         # Save VARS for later steps
-        echo "PKG_VERSION=${PKG_VERSION}" >> "$GITHUB_OUTPUT"
+        echo "PKG_VERSION_PREFIX=${PKG_VERSION_PREFIX}" >> "$GITHUB_OUTPUT"
+        echo "PKG_VERSION=${SEMVER}" >> "$GITHUB_OUTPUT"
         echo "PKG_COMPONENT=${PKG_COMPONENT}" >> $GITHUB_OUTPUT
         echo "PKG_FEED=${PKG_FEED}" >> $GITHUB_OUTPUT
