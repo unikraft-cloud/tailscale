@@ -1,0 +1,55 @@
+name: 'Publish'
+description: 'Publish to proget'
+
+inputs:
+  pkg_token:
+    description: 'API token for Proget APT repository'
+    required: true
+  distro:
+    description: 'Linux distribution (e.g. "trixie", "bookworm")'
+    required: true
+  pkg_component:
+    description: 'Package component (e.g. "stable", "staging")'
+    required: true
+  pkg_feed:
+    description: 'Package feed (e.g. "cloud", "cloud-staging")'
+    required: true
+  pkg_dir:
+    description: 'Directory containing the packages to publish (e.g. "/dist")'
+    required: false
+    default: '/dist'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Publish to APT repository
+      shell: bash
+      run: |
+        set -xe
+        INTERNAL_FEED=cloud-internal
+        FAILMODE="--fail"
+        if curl --help | grep -q -- '--fail-with-body'; then
+          FAILMODE="--fail-with-body"
+        fi
+
+        upload() {
+          local pattern="$1" feed="$2" distro="$3" component="$4"
+          for deb in $pattern; do
+            [ -e "$deb" ] || continue
+            cat "${deb}" | curl $FAILMODE -L -v \
+              "https://pkg.unikraft.com/debian/$feed/upload/$distro/$component" \
+              -H "Transfer-Encoding: chunked" \
+              -u "api:${{ inputs.pkg_token }}" \
+              -X POST \
+              --data-binary @-
+          done
+
+          return $?
+        }
+
+        # Upload debug packages to internal feed and remove them afterwards
+        upload "${{ inputs.pkg_dir }}/*dbg_*.deb" "$INTERNAL_FEED" ${{ inputs.distro }} ${{ inputs.pkg_component }}
+        rm -f "${{ inputs.pkg_dir }}/*dbg_*.deb"
+
+        # Upload all the remaining packages
+        upload "${{ inputs.pkg_dir }}/*.deb" ${{ inputs.pkg_feed }} ${{ inputs.distro }} ${{ inputs.pkg_component }}
