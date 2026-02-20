@@ -68,6 +68,7 @@ jobs:
         nfpm_file: "nfpm.yaml.${{ matrix.distro }}"
       env:
         COMMITS: ${{ steps.build.outputs.commits }}
+        DISTRO: ${{ matrix.distro }}
 
     - name: Upload build artifacts to GitHub
       uses: actions/upload-artifact@v4
