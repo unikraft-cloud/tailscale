@@ -6,32 +6,54 @@ on:
   workflow_dispatch:
     inputs:
       publish_distro:
-        description: 'Distro to publish (bullseye, bookworm, trixie)'
+        description: 'Distro to publish (deb11, deb12, deb13, ubuntu24.04, ubuntu26.04)'
         type: choice
         default: 'all'
         options:
           - all
-          - bullseye
-          - bookworm
-          - trixie
+          - deb11
+          - deb12
+          - deb13
+          - ubuntu24.04
+          - ubuntu26.04
 
 permissions:
   contents: write
   packages: write
 
 jobs:
+  setup_matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set_matrix.outputs.matrix }}
+    steps:
+      - id: set_matrix
+        run: |
+          SELECTED="${{ github.event.inputs.publish_distro }}"
+
+          ALL='{"include":[
+            {"name":"deb11","distro_codename":"bullseye","container":"debian:11","nfpm_file":"nfpm.yaml.deb11"},
+            {"name":"deb12","distro_codename":"bookworm","container":"debian:12","nfpm_file":"nfpm.yaml.deb12"},
+            {"name":"deb13","distro_codename":"trixie","container":"debian:13","nfpm_file":"nfpm.yaml.deb13"},
+            {"name":"ubuntu24.04","distro_codename":"noble","container":"ubuntu:24.04","nfpm_file":"nfpm.yaml.ubuntu24.04"},
+            {"name":"ubuntu26.04","distro_codename":"resolute","container":"ubuntu:26.04","nfpm_file":"nfpm.yaml.ubuntu26.04"}
+          ]}'
+
+          if [ -z "${SELECTED}" ] || [ "${SELECTED}" = "all" ]; then
+            echo "matrix=$(echo "${ALL}" | jq -c '.')" >> "$GITHUB_OUTPUT"
+          else
+            echo "matrix=$(echo "${ALL}" | jq -c "{include: [.include[] | select(.name == \"${SELECTED}\")]}")" >> "$GITHUB_OUTPUT"
+          fi
+
   release:
+    needs: setup_matrix
     strategy:
       fail-fast: false
-      matrix:
-        distro: ${{ fromJSON(github.event_name == 'push' &&
-         '["bullseye","bookworm","trixie"]' ||
-         (github.event.inputs.publish_distro == 'all' &&
-         '["bullseye","bookworm","trixie"]' || format('["{0}"]', github.event.inputs.publish_distro))) }}
+      matrix: ${{ fromJSON(needs.setup_matrix.outputs.matrix) }}
     outputs:
       pkg_version: ${{ steps.package.outputs.pkg_version }} # Expose step output as job output
     runs-on: ubuntu-latest
-    container: debian:${{ matrix.distro }}
+    container: ${{ matrix.container }}
     env:
       GO_VERSION: stable
       PYTHONDONTWRITEBYTECODE: 1
@@ -65,22 +87,20 @@ jobs:
       id: package
       uses:  ./.github/actions/package
       with:
-        nfpm_file: "nfpm.yaml.${{ matrix.distro }}"
-      env:
-        COMMITS: ${{ steps.build.outputs.commits }}
-        DISTRO: ${{ matrix.distro }}
+        nfpm_file: "${{ matrix.nfpm_file }}"
+        distro: "${{ matrix.name }}"
 
     - name: Upload build artifacts to GitHub
       uses: actions/upload-artifact@v4
       with:
-        name: platform-tailscaled-${{ matrix.distro }}-latest
+        name: platform-tailscaled-${{ matrix.name }}-latest
         path: /dist
         if-no-files-found: error
         retention-days: 1
         overwrite: true
 
     - name: Publish to Gemfury
-      if: ${{ (matrix.distro == 'bullseye') && (github.ref == 'refs/heads/prod-stable' || github.ref == 'refs/heads/prod-staging') }}
+      if: ${{ (matrix.name == 'deb11') && (github.ref == 'refs/heads/prod-stable' || github.ref == 'refs/heads/prod-staging') }}
       shell: bash
       run: |
         set -xe
@@ -98,7 +118,7 @@ jobs:
     - name: Publish to APT repository
       uses: ./.github/actions/publish
       with:
-        distro: "${{ matrix.distro }}"
+        distro: "${{ matrix.distro_codename }}"
         pkg_token: ${{ secrets.PKG_TOKEN }}
         pkg_component: ${{ steps.package.outputs.pkg_component }}
         pkg_feed: ${{ steps.package.outputs.pkg_feed }}
