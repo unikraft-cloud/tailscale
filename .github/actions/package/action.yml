@@ -5,6 +5,9 @@ inputs:
   nfpm_file:
     required: true
     description: "Name of the NFPM file"
+  distro:
+    required: true
+    description: "Package distro/version suffix, e.g. deb12 or ubuntu24.04"
 
 outputs:
   pkg_version_prefix:
@@ -32,6 +35,7 @@ runs:
         PKG_COMPONENT=
         PKG_VERSION_PREFIX=
         PKG_FEED=
+        DISTRO="${{ inputs.distro }}"
 
         branch2version() {
           # bash-internal version that is likely safer and faster
@@ -84,16 +88,7 @@ runs:
           PKG_FEED="cloud-internal"
         fi
 
-        PKG_DISTVER=""
-        if   [ "${DISTRO}" = "trixie" ]; then
-          PKG_DISTVER="deb13"
-        elif [ "${DISTRO}" = "bookworm" ]; then
-          PKG_DISTVER="deb12"
-        elif [ "${DISTRO}" = "bullseye" ]; then
-          PKG_DISTVER="deb11"
-        fi
-
-        export SEMVER="${PKG_VERSION_PREFIX}+${PKG_DISTVER}"
+        export SEMVER="${PKG_VERSION_PREFIX}+${DISTRO}"
         mkdir -p /dist;
         nfpm package --config ${{inputs.nfpm_file}} --packager deb --target /dist;
         rename 's/:/_/g' /dist/*.deb
