@@ -1,5 +1,11 @@
 name: 'Build'
 description: 'Build from sources'
+
+inputs:
+  arch:
+    required: true
+    description: "Target architecture (amd64 or arm64)"
+
 outputs:
   commits:
     description: "Commit count"
@@ -14,6 +20,14 @@ runs:
       run: |
         set -xe
         git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+        # Set GOARCH for cross-compilation
+        if [ "${{ inputs.arch }}" = "arm64" ]; then
+          export GOARCH=arm64
+        else
+          export GOARCH=amd64
+        fi
+        export CGO_ENABLED=0
 
         ./build_dist.sh tailscale.com/cmd/tailscale
         ./build_dist.sh tailscale.com/cmd/tailscaled
