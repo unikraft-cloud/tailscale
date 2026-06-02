@@ -8,6 +8,9 @@ inputs:
   distro:
     required: true
     description: "Package distro/version suffix, e.g. deb12 or ubuntu24.04"
+  arch:
+    required: true
+    description: "Target architecture (amd64 or arm64)"
 
 outputs:
   pkg_version_prefix:
@@ -36,6 +39,7 @@ runs:
         PKG_VERSION_PREFIX=
         PKG_FEED=
         DISTRO="${{ inputs.distro }}"
+        ARCH="${{ inputs.arch }}"
 
         branch2version() {
           # bash-internal version that is likely safer and faster
@@ -89,8 +93,10 @@ runs:
         fi
 
         export SEMVER="${PKG_VERSION_PREFIX}+${DISTRO}"
+        export ARCH
         mkdir -p /dist;
-        nfpm package --config ${{inputs.nfpm_file}} --packager deb --target /dist;
+        envsubst < "${{ inputs.nfpm_file }}" > nfpm-processed.yaml
+        nfpm package --config nfpm-processed.yaml --packager deb --target /dist;
         rename 's/:/_/g' /dist/*.deb
 
         # Save VARS for later steps
