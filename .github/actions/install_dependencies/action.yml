@@ -13,6 +13,7 @@ runs:
           curl \
           wget \
           rename \
+          gettext;
 
     - name: Install release dependencies
       shell: bash

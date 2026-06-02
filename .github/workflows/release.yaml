@@ -32,11 +32,16 @@ jobs:
           SELECTED="${{ github.event.inputs.publish_distro }}"
 
           ALL='{"include":[
-            {"name":"deb11","distro_codename":"bullseye","container":"debian:11","nfpm_file":"nfpm.yaml.deb11"},
-            {"name":"deb12","distro_codename":"bookworm","container":"debian:12","nfpm_file":"nfpm.yaml.deb12"},
-            {"name":"deb13","distro_codename":"trixie","container":"debian:13","nfpm_file":"nfpm.yaml.deb13"},
-            {"name":"ubuntu24.04","distro_codename":"noble","container":"ubuntu:24.04","nfpm_file":"nfpm.yaml.ubuntu24.04"},
-            {"name":"ubuntu26.04","distro_codename":"resolute","container":"ubuntu:26.04","nfpm_file":"nfpm.yaml.ubuntu26.04"}
+            {"name":"deb11","distro_codename":"bullseye","container":"debian:11","nfpm_file":"nfpm.yaml.deb11","arch":"amd64"},
+            {"name":"deb11","distro_codename":"bullseye","container":"debian:11","nfpm_file":"nfpm.yaml.deb11","arch":"arm64"},
+            {"name":"deb12","distro_codename":"bookworm","container":"debian:12","nfpm_file":"nfpm.yaml.deb12","arch":"amd64"},
+            {"name":"deb12","distro_codename":"bookworm","container":"debian:12","nfpm_file":"nfpm.yaml.deb12","arch":"arm64"},
+            {"name":"deb13","distro_codename":"trixie","container":"debian:13","nfpm_file":"nfpm.yaml.deb13","arch":"amd64"},
+            {"name":"deb13","distro_codename":"trixie","container":"debian:13","nfpm_file":"nfpm.yaml.deb13","arch":"arm64"},
+            {"name":"ubuntu24.04","distro_codename":"noble","container":"ubuntu:24.04","nfpm_file":"nfpm.yaml.ubuntu24.04","arch":"amd64"},
+            {"name":"ubuntu24.04","distro_codename":"noble","container":"ubuntu:24.04","nfpm_file":"nfpm.yaml.ubuntu24.04","arch":"arm64"},
+            {"name":"ubuntu26.04","distro_codename":"resolute","container":"ubuntu:26.04","nfpm_file":"nfpm.yaml.ubuntu26.04","arch":"amd64"},
+            {"name":"ubuntu26.04","distro_codename":"resolute","container":"ubuntu:26.04","nfpm_file":"nfpm.yaml.ubuntu26.04","arch":"arm64"}
           ]}'
 
           if [ -z "${SELECTED}" ] || [ "${SELECTED}" = "all" ]; then
@@ -82,6 +87,8 @@ jobs:
     - name: Build
       id: build
       uses: ./.github/actions/build
+      with:
+        arch: "${{ matrix.arch }}"
 
     - name: Package
       id: package
@@ -89,18 +96,19 @@ jobs:
       with:
         nfpm_file: "${{ matrix.nfpm_file }}"
         distro: "${{ matrix.name }}"
+        arch: "${{ matrix.arch }}"
 
     - name: Upload build artifacts to GitHub
       uses: actions/upload-artifact@v4
       with:
-        name: platform-tailscaled-${{ matrix.name }}-latest
+        name: platform-tailscaled-${{ matrix.name }}-${{ matrix.arch }}-latest
         path: /dist
         if-no-files-found: error
         retention-days: 1
         overwrite: true
 
     - name: Publish to Gemfury
-      if: ${{ (matrix.name == 'deb11') && (github.ref == 'refs/heads/prod-stable' || github.ref == 'refs/heads/prod-staging') }}
+      if: ${{ (matrix.name == 'deb11') && (matrix.arch == 'amd64') && (github.ref == 'refs/heads/prod-stable' || github.ref == 'refs/heads/prod-staging') }}
       shell: bash
       run: |
         set -xe
