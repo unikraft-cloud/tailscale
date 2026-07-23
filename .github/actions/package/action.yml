@@ -22,6 +22,9 @@ outputs:
   pkg_feed:
     description: "Proget feed"
     value: ${{ steps.package.outputs.PKG_FEED }}
+  pkg_name:
+    description: "Package name"
+    value: ${{ steps.package.outputs.PKG_NAME }}
 
 runs:
   using: "composite"
@@ -31,10 +34,12 @@ runs:
       id: package
       run: |
         set -xe
+        EPOCH=6
         VERSION="$(support/scripts/genver.sh ${UKP_PACKAGE} ${COMMITS})"
         PKG_COMPONENT=
         PKG_VERSION_PREFIX=
         PKG_FEED=
+        RELEASE_VERSION=
         DISTRO="${{ inputs.distro }}"
 
         branch2version() {
@@ -63,38 +68,102 @@ runs:
           printf "%s\n" "${VER_BRANCH}"
         }
 
-        if [[ "$GITHUB_REF" == 'refs/heads/prod-stable' ]]; then
-          PKG_COMPONENT="stable"
-          PKG_VERSION_PREFIX="5:${VERSION}-9stable"
-          PKG_FEED="cloud"
-        elif [[ "$GITHUB_REF" == "refs/heads/prod-preview" ]]; then
-          PKG_COMPONENT="preview"
-          PKG_VERSION_PREFIX="5:${VERSION}-7preview"
-          PKG_FEED="cloud"
-        elif [[ "$GITHUB_REF" == 'refs/heads/prod-staging' ]]; then
+        if [[ "$GITHUB_REF" == 'refs/heads/prod-staging' ]]; then
           PKG_COMPONENT="staging"
-          PKG_VERSION_PREFIX="5:${VERSION}-2staging"
+          PKG_VERSION_PREFIX="${EPOCH}:${VERSION}-2staging"
           PKG_FEED="cloud-staging"
+        elif [[ "$GITHUB_REF" =~ ^refs/heads/prod-stable([0-9]*)$ ]]; then
+          RELEASE_VERSION="${BASH_REMATCH[1]}"
+          PKG_COMPONENT="stable"
+          PKG_VERSION_PREFIX="${EPOCH}:${VERSION}-9stable"
+          PKG_FEED="cloud"
+        elif [[ "$GITHUB_REF" =~ ^refs/heads/prod-preview([0-9]*)$ ]]; then
+          RELEASE_VERSION="${BASH_REMATCH[1]}"
+          PKG_COMPONENT="preview"
+          PKG_VERSION_PREFIX="${EPOCH}:${VERSION}-7preview"
+          PKG_FEED="cloud"
         else
           mapfile -t BRCUSTOM < <( branch2version "$( printf '%s' "$GITHUB_REF" | cut -f1,2 --complement -d'/' )")
           if [ -n "${BRCUSTOM[0]}" ]; then
             PKG_COMPONENT="${BRCUSTOM[0]}"
-            PKG_VERSION_PREFIX="5:${VERSION}-0dev+${BRCUSTOM[0]}+${BRCUSTOM[1]}"
+            PKG_VERSION_PREFIX="${EPOCH}:${VERSION}-0dev+${BRCUSTOM[0]}+${BRCUSTOM[1]}"
           else
             # branch does not have a user name
             PKG_COMPONENT="devel"
-            PKG_VERSION_PREFIX="5:${VERSION}-0dev+${BRCUSTOM[1]}"
+            PKG_VERSION_PREFIX="${EPOCH}:${VERSION}-0dev+${BRCUSTOM[1]}"
           fi
           PKG_FEED="cloud-internal"
         fi
 
         export SEMVER="${PKG_VERSION_PREFIX}+${DISTRO}"
+        export RELEASE_VERSION="${RELEASE_VERSION}"
+
         mkdir -p /dist;
-        nfpm package --config ${{inputs.nfpm_file}} --packager deb --target /dist;
+
+        # Generate nfpm config with dynamic release conflicts
+        NFPM_CONFIG="/tmp/nfpm-generated.yaml"
+        cp "${{ inputs.nfpm_file }}" "${NFPM_CONFIG}"
+        if [ -n "${RELEASE_VERSION}" ]; then
+          CONFLICT_LINES=""
+          for ((i=RELEASE_VERSION-1; i>=1; i--)); do
+            CONFLICT_LINES+="  - ukp${i}-tailscale\n"
+          done
+          sed -i "s|  # __DYNAMIC_RELEASE_CONFLICTS__|${CONFLICT_LINES}  # __DYNAMIC_RELEASE_CONFLICTS__|" "${NFPM_CONFIG}"
+        fi
+
+        nfpm package --config "${NFPM_CONFIG}" --packager deb --target /dist;
         rename 's/:/_/g' /dist/*.deb
 
+        PKG_NAME="ukp${RELEASE_VERSION}-tailscale"
         # Save VARS for later steps
         echo "PKG_VERSION_PREFIX=${PKG_VERSION_PREFIX}" >> "$GITHUB_OUTPUT"
         echo "PKG_VERSION=${SEMVER}" >> "$GITHUB_OUTPUT"
         echo "PKG_COMPONENT=${PKG_COMPONENT}" >> $GITHUB_OUTPUT
         echo "PKG_FEED=${PKG_FEED}" >> $GITHUB_OUTPUT
+        echo "RELEASE_VERSION=${RELEASE_VERSION}" >> "$GITHUB_OUTPUT"
+        echo "PKG_NAME=${PKG_NAME}" >> $GITHUB_OUTPUT
+
+    - name: Prepare meta package
+      id: prepare_meta
+      if: ${{ steps.package.outputs.RELEASE_VERSION != '' }}
+      shell: bash
+      run: |
+        # Build meta package only if this is the highest numbered release branch.
+        # For hotfix pushes to older branches (e.g. prod-stable13 when prod-stable14
+        # exists), we skip the meta package so it keeps pointing to the latest.
+
+        git fetch --no-tags --prune origin 'refs/heads/prod-stable*:refs/remotes/origin/prod-stable*' 'refs/heads/prod-preview*:refs/remotes/origin/prod-preview*'
+        RELEASE_VERSION="${{ steps.package.outputs.RELEASE_VERSION }}"
+        PKG_VERSION_PREFIX="${{ steps.package.outputs.PKG_VERSION_PREFIX }}"
+        DISTRO="${{ inputs.distro }}"
+        BUILD_META=true
+
+        # Export for nfpm
+        export SEMVER="${PKG_VERSION_PREFIX}+${DISTRO}"
+        export RELEASE_VERSION
+
+        # Determine branch kind (stable or preview)
+        if [[ "$GITHUB_REF" =~ ^refs/heads/prod-stable ]]; then
+          BRANCH_KIND="prod-stable"
+        else
+          BRANCH_KIND="prod-preview"
+        fi
+
+        # Query all remote branches matching the same kind with a numeric suffix
+        while IFS= read -r ref; do
+          # git branch -r output has leading whitespace and short form: "  origin/prod-stableN"
+          ref="${ref## }"
+          if [[ "${ref}" =~ origin/${BRANCH_KIND}([0-9]+)$ ]]; then
+            V="${BASH_REMATCH[1]}"
+            if (( V > ${RELEASE_VERSION} )); then
+              BUILD_META=false
+              echo "::notice::Skipping meta package: ${BRANCH_KIND}${V} exists (current: ${RELEASE_VERSION}). This is a hotfix build."
+              break;
+            fi
+          fi
+        done < <(git branch -r --list "origin/${BRANCH_KIND}*")
+
+        if [ "${BUILD_META}" = true ]; then
+          nfpm package --config "nfpm-meta.yaml" --packager deb --target /dist;
+          rename 's/:/_/g' /dist/*.deb;
+        fi

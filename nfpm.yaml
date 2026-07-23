@@ -1,8 +1,8 @@
-name: ukp-tailscale
+name: ukp${RELEASE_VERSION}-tailscale
 arch: amd64
 platform: linux
 version: ${SEMVER}
-maintainer: Unikraft GmbH <monkey@unikraft.io>
+maintainer: Unikraft GmbH <support@unikraft.com>
 description: The easiest, most secure, cross platform way to use WireGuard + oauth2 + 2FA/SSO. Patched version, compatible with Unikraft Cloud.
 homepage: https://www.tailscale.com
 vendor: Unikraft GmbH
@@ -17,6 +17,8 @@ recommends:
 conflicts:
   - tailscale
   - tailscale-relay
+  - ukp-tailscale (<< 6:0.0.0)
+  # __DYNAMIC_RELEASE_CONFLICTS__
 replaces:
   - tailscale
   - tailscale-relay
