@@ -9,3 +9,6 @@ vendor: Unikraft GmbH
 license: UNLICENSED
 depends:
   - ukp${RELEASE_VERSION}-tailscale (= ${SEMVER})
+  - iptables
+recommends:
+  - iproute2
