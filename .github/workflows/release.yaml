@@ -2,7 +2,7 @@ name: release
 
 on:
   push:
-    branches: [prod-staging, prod-stable, prod-preview]
+    branches: [prod-staging, prod-stable, prod-preview, 'prod-preview[0-9]+', 'prod-stable[0-9]+']
   workflow_dispatch:
     inputs:
       publish_distro:
@@ -71,7 +71,7 @@ jobs:
         DISTRO: ${{ matrix.distro }}
 
     - name: Upload build artifacts to GitHub
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: platform-tailscaled-${{ matrix.distro }}-latest
         path: /dist
