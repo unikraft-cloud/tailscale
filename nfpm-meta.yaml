@@ -1,0 +1,14 @@
+name: ukp-tailscale
+arch: amd64
+platform: linux
+version: ${SEMVER}
+maintainer: Unikraft GmbH <support@unikraft.com>
+description: "Unikraft Platform - Meta package (installs latest ukp${RELEASE_VERSION}-tailscale)"
+homepage: https://unikraft.cloud
+vendor: Unikraft GmbH
+license: UNLICENSED
+depends:
+  - ukp${RELEASE_VERSION}-tailscale (= ${SEMVER})
+  - iptables
+recommends:
+  - iproute2
