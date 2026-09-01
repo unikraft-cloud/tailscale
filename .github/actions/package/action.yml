@@ -11,6 +11,12 @@ inputs:
   arch:
     required: true
     description: "Target architecture (amd64 or arm64)"
+  commits:
+    required: true
+    description: "Commit count since the last tag"
+  version_short:
+    required: true
+    description: "Short version, e.g. 1.98.3"
 
 outputs:
   pkg_version_prefix:
@@ -34,7 +40,7 @@ runs:
       id: package
       run: |
         set -xe
-        VERSION="$(support/scripts/genver.sh ${UKP_PACKAGE} ${COMMITS})"
+        VERSION="$(support/scripts/genver.sh "${UKP_PACKAGE}" "${{ inputs.commits }}" "${{ inputs.version_short }}")"
         PKG_COMPONENT=
         PKG_VERSION_PREFIX=
         PKG_FEED=
