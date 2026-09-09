@@ -32,8 +32,8 @@ jobs:
           SELECTED="${{ github.event.inputs.publish_distro }}"
 
           ALL='{"include":[
-            {"name":"deb11","distro_codename":"bullseye","container":"debian:11","nfpm_file":"nfpm.yaml.deb11","arch":"amd64"},
-            {"name":"deb11","distro_codename":"bullseye","container":"debian:11","nfpm_file":"nfpm.yaml.deb11","arch":"arm64"},
+            {"name":"deb11","distro_codename":"bullseye","container":"debian:bullseye-20241016","nfpm_file":"nfpm.yaml.deb11","arch":"amd64"},
+            {"name":"deb11","distro_codename":"bullseye","container":"debian:bullseye-20241016","nfpm_file":"nfpm.yaml.deb11","arch":"arm64"},
             {"name":"deb12","distro_codename":"bookworm","container":"debian:12","nfpm_file":"nfpm.yaml.deb12","arch":"amd64"},
             {"name":"deb12","distro_codename":"bookworm","container":"debian:12","nfpm_file":"nfpm.yaml.deb12","arch":"arm64"},
             {"name":"deb13","distro_codename":"trixie","container":"debian:13","nfpm_file":"nfpm.yaml.deb13","arch":"amd64"},
@@ -63,6 +63,19 @@ jobs:
       PYTHONDONTWRITEBYTECODE: 1
       UKP_PACKAGE: /platform-tailscaled-install
     steps:
+    - name: Point Debian 11 at archive.debian.org
+      # bullseye is EOL: bullseye-security's release file has expired and its
+      # packages are gone from the live mirrors. archive.debian.org serves the
+      # final 11.11 set, which is what the pinned image ships.
+      if: ${{ matrix.name == 'deb11' }}
+      run: |
+        set -xe
+        printf '%s\n' \
+          'deb http://archive.debian.org/debian bullseye main' \
+          'deb http://archive.debian.org/debian bullseye-updates main' \
+          > /etc/apt/sources.list
+        echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99-bullseye-eol
+
     - name: Install checkout dependencies
       run: |
         set -xe;
