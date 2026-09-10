@@ -1,5 +1,5 @@
 name: ukp-tailscale
-arch: amd64
+arch: all
 platform: linux
 version: ${SEMVER}
 maintainer: Unikraft GmbH <support@unikraft.com>

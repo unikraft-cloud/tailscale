@@ -79,6 +79,8 @@ runs:
         }
 
         if [[ "$GITHUB_REF" == 'refs/heads/prod-staging' ]]; then
+          # prod-staging is release 0: it publishes ukp0-* only, no meta package
+          RELEASE_VERSION="0"
           PKG_COMPONENT="staging"
           PKG_VERSION_PREFIX="${EPOCH}:${VERSION}-2staging"
           PKG_FEED="cloud-staging"
@@ -122,6 +124,35 @@ runs:
           sed -i "s|  # __DYNAMIC_RELEASE_CONFLICTS__|${CONFLICT_LINES}  # __DYNAMIC_RELEASE_CONFLICTS__|" "${NFPM_CONFIG}"
         fi
 
+        if [ "${RELEASE_VERSION}" = "0" ]; then
+          # Release 0 is the staging build. Let it stand in for the newest numbered
+          # release, so a release node can run individual components from staging.
+          # Provides must be versioned: an unversioned one does not satisfy a
+          # versioned dependency. Only the newest release is named, because a
+          # numbered release conflicts with ukp1-*..ukpN-1-* and an unversioned
+          # Conflicts also catches whatever provides that name -- naming an older
+          # release here would make ukp0-* collide with the release it is meant to
+          # sit alongside. Numbered releases never name ukp0-*, so none of this is
+          # visible to customers.
+          git config --global --add safe.directory "$(pwd)"
+          git fetch --no-tags --prune origin 'refs/heads/prod-stable*:refs/remotes/origin/prod-stable*' 'refs/heads/prod-preview*:refs/remotes/origin/prod-preview*'
+          MAX_RELEASE=0
+          while IFS= read -r ref; do
+            ref="${ref## }"
+            if [[ "${ref}" =~ origin/prod-(stable|preview)([0-9]+)$ ]]; then
+              if (( BASH_REMATCH[2] > MAX_RELEASE )); then
+                MAX_RELEASE="${BASH_REMATCH[2]}"
+              fi
+            fi
+          done < <(git branch -r --list 'origin/prod-stable*' 'origin/prod-preview*')
+
+          PROVIDES_LINES=""
+          if (( MAX_RELEASE >= 1 )); then
+            PROVIDES_LINES="  - ukp${MAX_RELEASE}-tailscale (= ${SEMVER})\n"
+          fi
+          sed -i "s|  # __DYNAMIC_RELEASE_PROVIDES__|${PROVIDES_LINES}  # __DYNAMIC_RELEASE_PROVIDES__|" "${NFPM_CONFIG}"
+        fi
+
         envsubst < "${NFPM_CONFIG}" > nfpm-processed.yaml
         nfpm package --config "nfpm-processed.yaml" --packager deb --target /dist;
         rename 's/:/_/g' /dist/*.deb
@@ -137,7 +168,7 @@ runs:
 
     - name: Prepare meta package
       id: prepare_meta
-      if: ${{ steps.package.outputs.RELEASE_VERSION != '' }}
+      if: ${{ steps.package.outputs.RELEASE_VERSION != '' && steps.package.outputs.RELEASE_VERSION != '0' }}
       shell: bash
       run: |
         # Build meta package only if this is the highest numbered release branch.

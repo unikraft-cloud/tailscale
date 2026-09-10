@@ -12,6 +12,7 @@ depends:
   - iptables
 provides:
   - tailscale
+  # __DYNAMIC_RELEASE_PROVIDES__
 recommends:
   - iproute2
 conflicts:
@@ -22,6 +23,7 @@ conflicts:
 replaces:
   - tailscale
   - tailscale-relay
+  - ukp-tailscale (<< ${SEMVER})
 deb:
   breaks:
     - tailscale
