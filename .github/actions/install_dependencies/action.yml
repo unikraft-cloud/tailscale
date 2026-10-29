@@ -20,6 +20,5 @@ runs:
       run: |
         set -xe
         echo 'deb [trusted=yes] https://repo.goreleaser.com/apt/ /' | tee /etc/apt/sources.list.d/goreleaser.list
-        echo "deb [trusted=yes] https://apt.fury.io/cli/ /" > /etc/apt/sources.list.d/fury-cli.list
         apt-get update
-        apt-get install --no-install-recommends -y nfpm fury-cli
+        apt-get install --no-install-recommends -y nfpm

@@ -121,22 +121,6 @@ jobs:
         retention-days: 1
         overwrite: true
 
-    - name: Publish to Gemfury
-      if: ${{ (matrix.name == 'deb11') && (matrix.arch == 'amd64') && (github.ref == 'refs/heads/prod-stable' || github.ref == 'refs/heads/prod-staging') }}
-      shell: bash
-      run: |
-        set -xe
-        if [[ "$GITHUB_REF" == "refs/heads/prod-stable" ]]; then
-          FUSER="$FURY_USER_STABLE"
-          FTOKEN="$FURY_TOKEN_STABLE"
-        fi
-        fury push "$(ls /dist/*.deb)" --quiet --account "$FUSER" --api-token "$FTOKEN"
-      env:
-        FURY_TOKEN_STABLE: ${{ secrets.FURY_TOKEN }}
-        FURY_USER_STABLE: ${{ secrets.FURY_USER }}
-        FUSER: ${{ secrets.FURY_USER_STAGING }}
-        FTOKEN: ${{ secrets.FURY_TOKEN_STAGING }}
-
     - name: Publish to APT repository
       uses: ./.github/actions/publish
       with:
